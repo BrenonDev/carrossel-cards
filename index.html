@@ -19,6 +19,11 @@
       --card-w: clamp(150px, 24vw, 224px);
       --radius: 24px;
       --ease: cubic-bezier(.2, .75, .18, 1);
+      --card-motion-duration: 720ms;
+      --card-opacity-duration: 520ms;
+      --card-effect-duration: 520ms;
+      --card-shadow-duration: 650ms;
+      --control-transition-duration: 180ms;
     }
 
     * { box-sizing: border-box; }
@@ -167,10 +172,10 @@
       backface-visibility: hidden;
       will-change: transform, opacity, filter, box-shadow;
       transition:
-        transform 720ms var(--ease),
-        opacity 520ms ease,
-        filter 520ms ease,
-        box-shadow 650ms ease;
+        transform var(--card-motion-duration) var(--ease),
+        opacity var(--card-opacity-duration) ease,
+        filter var(--card-effect-duration) ease,
+        box-shadow var(--card-shadow-duration) ease;
     }
 
     .stage.is-dragging .card { transition: none; }
@@ -299,12 +304,17 @@
       box-shadow: 0 12px 30px rgba(0,0,0,.24);
       backdrop-filter: blur(14px);
       cursor: pointer;
-      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+      transition:
+        transform var(--control-transition-duration) ease,
+        background var(--control-transition-duration) ease,
+        border-color var(--control-transition-duration) ease;
     }
 
     .control:hover { transform: translateY(-2px); background: rgba(34, 43, 82, .82); }
     .control:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .control:active { transform: translateY(0) scale(.96); }
+    .control:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .control[hidden] { display: none; }
 
     .counter {
       min-width: 82px;
@@ -427,6 +437,25 @@
 
   <script>
     (() => {
+      /* Configurações principais do componente. Tempos são informados em milissegundos. */
+      const CONFIG = Object.freeze({
+        animation: Object.freeze({
+          cardMovement: 720,
+          cardOpacity: 520,
+          cardEffects: 520,
+          cardShadow: 650,
+          controls: 180
+        }),
+        autoplay: Object.freeze({
+          enabled: true,                 // false remove toda a funcionalidade de autoplay
+          startsPlaying: true,           // false abre a página com o carrossel pausado
+          showButton: true,              // false oculta somente o botão Pausar/Reproduzir
+          interval: 2000,                // intervalo entre as trocas automáticas
+          resumeAfterInteraction: 5200,  // espera antes de retomar após arrastar/clicar
+          pauseOnHover: false            // pausa enquanto o ponteiro estiver sobre o carrossel
+        })
+      });
+
       const items = [
         ["Horizonte", "Exploração", "#5c6cff", "#273080"],
         ["Órbita", "Tecnologia", "#7b52e8", "#342263"],
@@ -452,11 +481,25 @@
       const status = document.querySelector("#status");
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+      const animationProperties = {
+        cardMovement: "--card-motion-duration",
+        cardOpacity: "--card-opacity-duration",
+        cardEffects: "--card-effect-duration",
+        cardShadow: "--card-shadow-duration",
+        controls: "--control-transition-duration"
+      };
+
+      Object.entries(animationProperties).forEach(([key, property]) => {
+        document.documentElement.style.setProperty(property, `${CONFIG.animation[key]}ms`);
+      });
+
+      playButton.hidden = !CONFIG.autoplay.showButton;
+
       let position = 0;
       let pointerStartX = 0;
       let pointerStartPosition = 0;
       let dragging = false;
-      let autoplay = !reducedMotion.matches;
+      let autoplay = CONFIG.autoplay.enabled && CONFIG.autoplay.startsPlaying && !reducedMotion.matches;
       let autoplayTimer = null;
       let resumeTimer = null;
       let raf = 0;
@@ -579,12 +622,26 @@
       }
 
       function setAutoplay(value) {
-        autoplay = value && !reducedMotion.matches;
-        playButton.textContent = autoplay ? "Pausar" : "Reproduzir";
-        playButton.setAttribute("aria-label", autoplay ? "Pausar rotação automática" : "Iniciar rotação automática");
+        const unavailable = !CONFIG.autoplay.enabled || reducedMotion.matches;
+        autoplay = Boolean(value && !unavailable);
+
+        playButton.disabled = unavailable;
+        if (!CONFIG.autoplay.enabled) {
+          playButton.textContent = "Autoplay desativado";
+          playButton.setAttribute("aria-label", "Rotação automática desativada");
+        } else if (reducedMotion.matches) {
+          playButton.textContent = "Movimento reduzido";
+          playButton.setAttribute("aria-label", "Rotação automática desativada pela preferência de movimento reduzido");
+        } else {
+          playButton.textContent = autoplay ? "Pausar" : "Reproduzir";
+          playButton.setAttribute("aria-label", autoplay ? "Pausar rotação automática" : "Iniciar rotação automática");
+        }
+
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        if (autoplay) autoplayTimer = setInterval(() => move(1, false, false), 2000);
+        if (autoplay) {
+          autoplayTimer = setInterval(() => move(1, false, false), CONFIG.autoplay.interval);
+        }
       }
 
       function postponeAutoplay() {
@@ -592,7 +649,7 @@
         if (!autoplay) return;
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        resumeTimer = setTimeout(() => setAutoplay(true), 5200);
+        resumeTimer = setTimeout(() => setAutoplay(true), CONFIG.autoplay.resumeAfterInteraction);
       }
 
       function onPointerDown(event) {
@@ -647,11 +704,11 @@
       });
 
       carousel.addEventListener("mouseenter", () => {
-        if (autoplay) clearInterval(autoplayTimer);
+        if (CONFIG.autoplay.pauseOnHover && autoplay) clearInterval(autoplayTimer);
       });
 
       carousel.addEventListener("mouseleave", () => {
-        if (autoplay && !dragging) setAutoplay(true);
+        if (CONFIG.autoplay.pauseOnHover && autoplay && !dragging) setAutoplay(true);
       });
 
       document.addEventListener("visibilitychange", () => {
@@ -661,6 +718,7 @@
 
       reducedMotion.addEventListener?.("change", (event) => {
         if (event.matches) setAutoplay(false);
+        else setAutoplay(CONFIG.autoplay.startsPlaying);
       });
 
       window.addEventListener("resize", () => render(false), { passive: true });
