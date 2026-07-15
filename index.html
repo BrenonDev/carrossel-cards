@@ -553,7 +553,7 @@
         return delta;
       }
 
-      function render(announce = false) {
+      function render(announce = false, focusActiveCard = false) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(() => {
           const spacing = getSpacing();
@@ -597,6 +597,7 @@
           const index = activeIndex();
           counter.textContent = `${String(index + 1).padStart(2, "0")} / ${items.length}`;
           if (announce) status.textContent = `${items[index][0]}, card ${index + 1} de ${items.length}`;
+          if (focusActiveCard) cards[index].focus({ preventScroll: true });
         });
       }
 
@@ -609,15 +610,15 @@
         );
       }
 
-      function centerCard(index) {
+      function centerCard(index, focusActiveCard = false) {
         position = normalizeNear(position, index);
-        render(true);
+        render(true, focusActiveCard);
         postponeAutoplay();
       }
 
-      function move(step, announce = true, userInitiated = true) {
+      function move(step, announce = true, userInitiated = true, focusActiveCard = false) {
         position = Math.round(position) + step;
-        render(announce);
+        render(announce, focusActiveCard);
         if (userInitiated) postponeAutoplay();
       }
 
@@ -709,10 +710,11 @@
       playButton.addEventListener("click", () => setAutoplay(!autoplay));
 
       carousel.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowLeft") { event.preventDefault(); move(-1); }
-        if (event.key === "ArrowRight") { event.preventDefault(); move(1); }
-        if (event.key === "Home") { event.preventDefault(); centerCard(0); }
-        if (event.key === "End") { event.preventDefault(); centerCard(items.length - 1); }
+        const focusIsOnCard = document.activeElement?.classList.contains("card");
+        if (event.key === "ArrowLeft") { event.preventDefault(); move(-1, true, true, focusIsOnCard); }
+        if (event.key === "ArrowRight") { event.preventDefault(); move(1, true, true, focusIsOnCard); }
+        if (event.key === "Home") { event.preventDefault(); centerCard(0, focusIsOnCard); }
+        if (event.key === "End") { event.preventDefault(); centerCard(items.length - 1, focusIsOnCard); }
         if (event.key === " ") { event.preventDefault(); setAutoplay(!autoplay); }
       });
 
