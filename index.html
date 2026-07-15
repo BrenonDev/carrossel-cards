@@ -104,10 +104,6 @@
       -webkit-user-select: none;
     }
 
-    .carousel:focus-visible .stage {
-      box-shadow: inset 0 0 0 2px rgba(147, 167, 255, .78);
-    }
-
     .stage {
       position: relative;
       height: clamp(310px, 51vw, 490px);
@@ -412,7 +408,6 @@
     <section
       class="carousel"
       id="carousel"
-      tabindex="0"
       role="region"
       aria-roledescription="carrossel"
       aria-label="Carrossel 3D de exemplos"
@@ -420,10 +415,10 @@
       <div class="stage" id="stage"></div>
 
       <div class="controls" aria-label="Controles do carrossel">
-        <button class="control" id="prev" type="button" aria-label="Card anterior">←</button>
+        <button class="control" id="prev" type="button" tabindex="-1" aria-label="Card anterior">←</button>
         <span class="counter" id="counter" aria-live="polite">01 / 13</span>
-        <button class="control" id="next" type="button" aria-label="Próximo card">→</button>
-        <button class="control" id="play" type="button" aria-label="Pausar rotação automática">Pausar</button>
+        <button class="control" id="next" type="button" tabindex="-1" aria-label="Próximo card">→</button>
+        <button class="control" id="play" type="button" tabindex="-1" aria-label="Pausar rotação automática">Pausar</button>
       </div>
 
       <!-- <p class="hint">No celular, deslize horizontalmente. O gesto vertical da página continua disponível.</p> -->
@@ -622,6 +617,8 @@
         if (userInitiated) postponeAutoplay();
       }
 
+      const cardHasFocus = () => document.activeElement?.classList.contains("card");
+
       function setAutoplay(value) {
         const unavailable = !CONFIG.autoplay.enabled || reducedMotion.matches;
         autoplay = Boolean(value && !unavailable);
@@ -643,9 +640,9 @@
 
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        if (autoplay) {
+        if (autoplay && !dragging && !cardHasFocus()) {
           autoplayTimer = setInterval(() => {
-            if (!dragging) move(1, false, false);
+            if (!dragging && !cardHasFocus()) move(1, false, false);
           }, CONFIG.autoplay.interval);
         }
       }
@@ -710,12 +707,23 @@
       playButton.addEventListener("click", () => setAutoplay(!autoplay));
 
       carousel.addEventListener("keydown", (event) => {
-        const focusIsOnCard = document.activeElement?.classList.contains("card");
+        const focusIsOnCard = cardHasFocus();
         if (event.key === "ArrowLeft") { event.preventDefault(); move(-1, true, true, focusIsOnCard); }
         if (event.key === "ArrowRight") { event.preventDefault(); move(1, true, true, focusIsOnCard); }
         if (event.key === "Home") { event.preventDefault(); centerCard(0, focusIsOnCard); }
         if (event.key === "End") { event.preventDefault(); centerCard(items.length - 1, focusIsOnCard); }
         if (event.key === " ") { event.preventDefault(); setAutoplay(!autoplay); }
+      });
+
+      carousel.addEventListener("focusin", (event) => {
+        if (event.target.classList.contains("card")) suspendAutoplay();
+      });
+
+      carousel.addEventListener("focusout", (event) => {
+        if (!event.target.classList.contains("card")) return;
+        queueMicrotask(() => {
+          if (!cardHasFocus()) postponeAutoplay();
+        });
       });
 
       carousel.addEventListener("mouseenter", () => {
