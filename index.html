@@ -625,6 +625,9 @@
         const unavailable = !CONFIG.autoplay.enabled || reducedMotion.matches;
         autoplay = Boolean(value && !unavailable);
 
+        clearTimeout(resumeTimer);
+        resumeTimer = null;
+
         playButton.disabled = unavailable;
         if (!CONFIG.autoplay.enabled) {
           playButton.textContent = "Autoplay desativado";
@@ -640,16 +643,25 @@
         clearInterval(autoplayTimer);
         autoplayTimer = null;
         if (autoplay) {
-          autoplayTimer = setInterval(() => move(1, false, false), CONFIG.autoplay.interval);
+          autoplayTimer = setInterval(() => {
+            if (!dragging) move(1, false, false);
+          }, CONFIG.autoplay.interval);
         }
       }
 
-      function postponeAutoplay() {
+      function suspendAutoplay() {
         clearTimeout(resumeTimer);
-        if (!autoplay) return;
+        resumeTimer = null;
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        resumeTimer = setTimeout(() => setAutoplay(true), CONFIG.autoplay.resumeAfterInteraction);
+      }
+
+      function postponeAutoplay() {
+        suspendAutoplay();
+        if (!autoplay) return;
+        resumeTimer = setTimeout(() => {
+          if (!dragging) setAutoplay(true);
+        }, CONFIG.autoplay.resumeAfterInteraction);
       }
 
       function onPointerDown(event) {
@@ -660,7 +672,7 @@
         pointerStartPosition = position;
         stage.classList.add("is-dragging");
         stage.setPointerCapture(event.pointerId);
-        postponeAutoplay();
+        suspendAutoplay();
       }
 
       function onPointerMove(event) {
@@ -678,6 +690,7 @@
         if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
         position = Math.round(position);
         render(true);
+        postponeAutoplay();
       }
 
       stage.addEventListener("pointerdown", onPointerDown);
