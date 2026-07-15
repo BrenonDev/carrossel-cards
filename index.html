@@ -446,8 +446,8 @@
           startsPlaying: true,           // false abre a página com o carrossel pausado
           showButton: true,              // false oculta somente o botão Pausar/Reproduzir
           interval: 2000,                // intervalo entre as trocas automáticas
-          resumeAfterInteraction: 2000,  // espera antes de retomar após arrastar/clicar
-          pauseOnHover: false            // pausa enquanto o ponteiro estiver sobre o carrossel
+          pauseOnInteraction: true,      // clique, arraste, teclado ou foco pausam até ação explícita
+          pauseOnHover: false            // true faz o simples hover também pausar definitivamente
         })
       });
 
@@ -495,8 +495,8 @@
       let pointerStartPosition = 0;
       let dragging = false;
       let autoplay = CONFIG.autoplay.enabled && CONFIG.autoplay.startsPlaying && !reducedMotion.matches;
+      let followFocusedCardDuringAutoplay = false;
       let autoplayTimer = null;
-      let resumeTimer = null;
       let raf = 0;
       let suppressClick = false;
 
@@ -608,23 +608,21 @@
       function centerCard(index, focusActiveCard = false) {
         position = normalizeNear(position, index);
         render(true, focusActiveCard);
-        postponeAutoplay();
+        pauseAutoplayForInteraction();
       }
 
       function move(step, announce = true, userInitiated = true, focusActiveCard = false) {
         position = Math.round(position) + step;
         render(announce, focusActiveCard);
-        if (userInitiated) postponeAutoplay();
+        if (userInitiated) pauseAutoplayForInteraction();
       }
 
       const cardHasFocus = () => document.activeElement?.classList.contains("card");
 
-      function setAutoplay(value) {
+      function setAutoplay(value, followFocusedCard = false) {
         const unavailable = !CONFIG.autoplay.enabled || reducedMotion.matches;
         autoplay = Boolean(value && !unavailable);
-
-        clearTimeout(resumeTimer);
-        resumeTimer = null;
+        followFocusedCardDuringAutoplay = autoplay && followFocusedCard;
 
         playButton.disabled = unavailable;
         if (!CONFIG.autoplay.enabled) {
@@ -640,26 +638,15 @@
 
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        if (autoplay && !dragging && !cardHasFocus()) {
+        if (autoplay && !dragging) {
           autoplayTimer = setInterval(() => {
-            if (!dragging && !cardHasFocus()) move(1, false, false);
+            if (!dragging) move(1, false, false, followFocusedCardDuringAutoplay);
           }, CONFIG.autoplay.interval);
         }
       }
 
-      function suspendAutoplay() {
-        clearTimeout(resumeTimer);
-        resumeTimer = null;
-        clearInterval(autoplayTimer);
-        autoplayTimer = null;
-      }
-
-      function postponeAutoplay() {
-        suspendAutoplay();
-        if (!autoplay) return;
-        resumeTimer = setTimeout(() => {
-          if (!dragging) setAutoplay(true);
-        }, CONFIG.autoplay.resumeAfterInteraction);
+      function pauseAutoplayForInteraction() {
+        if (CONFIG.autoplay.pauseOnInteraction) setAutoplay(false);
       }
 
       function onPointerDown(event) {
@@ -670,7 +657,7 @@
         pointerStartPosition = position;
         stage.classList.add("is-dragging");
         stage.setPointerCapture(event.pointerId);
-        suspendAutoplay();
+        pauseAutoplayForInteraction();
       }
 
       function onPointerMove(event) {
@@ -688,7 +675,6 @@
         if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
         position = Math.round(position);
         render(true);
-        postponeAutoplay();
       }
 
       stage.addEventListener("pointerdown", onPointerDown);
@@ -704,7 +690,7 @@
 
       prevButton.addEventListener("click", () => move(-1));
       nextButton.addEventListener("click", () => move(1));
-      playButton.addEventListener("click", () => setAutoplay(!autoplay));
+      playButton.addEventListener("click", () => setAutoplay(!autoplay, false));
 
       carousel.addEventListener("keydown", (event) => {
         const focusIsOnCard = cardHasFocus();
@@ -712,36 +698,41 @@
         if (event.key === "ArrowRight") { event.preventDefault(); move(1, true, true, focusIsOnCard); }
         if (event.key === "Home") { event.preventDefault(); centerCard(0, focusIsOnCard); }
         if (event.key === "End") { event.preventDefault(); centerCard(items.length - 1, focusIsOnCard); }
-        if (event.key === " ") { event.preventDefault(); setAutoplay(!autoplay); }
+        if (event.key === " ") {
+          event.preventDefault();
+          if (event.repeat) return;
+          const willPlay = !autoplay;
+          setAutoplay(willPlay, willPlay && focusIsOnCard);
+        }
       });
 
       carousel.addEventListener("focusin", (event) => {
-        if (event.target.classList.contains("card")) suspendAutoplay();
+        if (
+          event.target.classList.contains("card") &&
+          !(autoplay && followFocusedCardDuringAutoplay)
+        ) {
+          pauseAutoplayForInteraction();
+        }
       });
 
       carousel.addEventListener("focusout", (event) => {
         if (!event.target.classList.contains("card")) return;
         queueMicrotask(() => {
-          if (!cardHasFocus()) postponeAutoplay();
+          if (!cardHasFocus()) followFocusedCardDuringAutoplay = false;
         });
       });
 
       carousel.addEventListener("mouseenter", () => {
-        if (CONFIG.autoplay.pauseOnHover && autoplay) clearInterval(autoplayTimer);
-      });
-
-      carousel.addEventListener("mouseleave", () => {
-        if (CONFIG.autoplay.pauseOnHover && autoplay && !dragging) setAutoplay(true);
+        if (CONFIG.autoplay.pauseOnHover) setAutoplay(false);
       });
 
       document.addEventListener("visibilitychange", () => {
-        if (document.hidden) clearInterval(autoplayTimer);
-        else if (autoplay) setAutoplay(true);
+        if (document.hidden) setAutoplay(false);
       });
 
       reducedMotion.addEventListener?.("change", (event) => {
         if (event.matches) setAutoplay(false);
-        else setAutoplay(CONFIG.autoplay.startsPlaying);
+        else setAutoplay(false);
       });
 
       window.addEventListener("resize", () => render(false), { passive: true });
