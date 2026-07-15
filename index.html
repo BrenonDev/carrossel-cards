@@ -353,8 +353,8 @@
   <main class="demo">
     <header class="intro">
       <p class="eyebrow">Demonstração interativa</p>
-      <h1>Carrossel 3D com encaixe central</h1>
-      <p class="subtitle">Arraste, deslize, use as setas do teclado ou os controles. O card mais próximo sempre retorna ao centro.</p>
+      <h1>Carrossel 3D</h1>
+      <p class="subtitle">Arraste, deslize, use as setas do teclado ou os controles.</p>
     </header>
 
     <section
@@ -374,7 +374,7 @@
         <button class="control" id="play" type="button" aria-label="Pausar rotação automática">Pausar</button>
       </div>
 
-      <p class="hint">No celular, deslize horizontalmente. O gesto vertical da página continua disponível.</p>
+      <!-- <p class="hint">No celular, deslize horizontalmente. O gesto vertical da página continua disponível.</p> -->
       <p class="sr-only" id="status" aria-live="polite"></p>
     </section>
   </main>
@@ -539,7 +539,7 @@
         playButton.setAttribute("aria-label", autoplay ? "Pausar rotação automática" : "Iniciar rotação automática");
         clearInterval(autoplayTimer);
         autoplayTimer = null;
-        if (autoplay) autoplayTimer = setInterval(() => move(1, false, false), 1500);
+        if (autoplay) autoplayTimer = setInterval(() => move(1, false, false), 2000);
       }
 
       function postponeAutoplay() {
